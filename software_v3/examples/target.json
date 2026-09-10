@@ -1,0 +1,5 @@
+{
+  "source": "SYNTHETIC detection center and maturity; not a YOLO inference or training sample",
+  "pixel": [320, 240],
+  "maturity": "ripe"
+}

@@ -1,0 +1,26 @@
+{
+  "provenance": "SYNTHETIC SOFTWARE EXAMPLE; not historical robot calibration",
+  "joints": [
+    {"name":"base", "axis":[0,0,1], "link_mm":[0,0,120], "zero_deg":0, "limits_deg":[-170,170]},
+    {"name":"shoulder", "axis":[0,1,0], "link_mm":[160,0,0], "zero_deg":0, "limits_deg":[-140,80]},
+    {"name":"elbow", "axis":[0,1,0], "link_mm":[140,0,0], "zero_deg":0, "limits_deg":[-145,145]},
+    {"name":"wrist_roll", "axis":[1,0,0], "link_mm":[0,0,0], "zero_deg":0, "limits_deg":[-170,170]},
+    {"name":"wrist_pitch", "axis":[0,1,0], "link_mm":[0,0,0], "zero_deg":0, "limits_deg":[-120,120]},
+    {"name":"tool_roll", "axis":[1,0,0], "link_mm":[60,0,0], "zero_deg":0, "limits_deg":[-170,170]}
+  ],
+  "home_deg":[0,-70,70,0,90,0],
+  "workspace_min_mm":[50,-280,30],
+  "workspace_max_mm":[360,280,350],
+  "safe_z_mm":180,
+  "cartesian_step_mm":8,
+  "max_joint_step_deg":1,
+  "speeds_deg_s":{"fast":60,"slow":15},
+  "motion_period_ms":20,
+  "pressure_period_ms":5,
+  "gripper":{"open":1.0,"closed":0.0,"step":0.05,"period_ms":30,"contact_delta":400,"hold_delta":600,"overforce_delta":1200,"timeout_ms":2000},
+  "pixel_to_plane":[[0.5,0,60],[0,0.5,-100],[0,0,1]],
+  "plane_to_base":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+  "grasp_z_mm":70,
+  "tool_rpy_deg":[0,90,0],
+  "bins_mm":{"ripe":[170,-120,80],"semi_ripe":[200,80,80],"unripe":[170,130,80]}
+}

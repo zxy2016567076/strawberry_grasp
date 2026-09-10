@@ -1,237 +1,116 @@
-# 草莓眼手力柔性抓取机器人
+# 草莓眼手力柔性分拣机器人
 
-> 基于 Renesas RA6M5 + Raspberry Pi 5 的异构双脑架构，实现草莓视觉识别、成熟度分级、柔性抓取、触觉反馈与端侧 TinyML 推理的完整闭环分拣系统。
+树莓派 5 负责视觉，Renesas RA6M5 负责执行，UART 连接上下位机。历史固定姿态分拣实物已完成并参赛；目前没有硬件，本次完善以可复现的软件验证为主。
 
-<p align="center">
-  <img src="images/system_overview.png" width="800" alt="系统全景">
-  <br/>
-  <sub>需要观看作品演示视频，可联系作者提供。</sub>
-</p>
+**历史硬件是五个运动关节 + 独立夹爪，共六路舵机。新增 `software_v3` 才是六个运动关节 + 独立夹爪的软件模型，不能当成原竞赛版本或真机升级成果。**
 
-## 核心亮点
+## 版本入口
 
-- **眼（视觉）** — 树莓派 5 运行 YOLOv8n，实时检测草莓并三级分类（成熟/半成熟/未熟），mAP50 达 **98.8%**
-- **手（执行）** — 6自由度机械臂通过 PCA9685 驱动，插值缓动轨迹 + 安全过渡状态机
-- **力（触觉）** — FSR402B 薄膜压力传感器 200Hz 采样，自适应夹持力闭环控制
-- **TinyML** — RA6M5 Cortex-M33 上部署 187 参数手写纯 C MLP（零库依赖、自实现前向传播），实时三分类抓取状态（稳定 / 滑脱风险 / 力量过大），单次推理 <1ms
-- **安全保护** — ADC 窗口比较器硬件中断，微秒级异常力响应保护
+| 版本 | 入口 | 内容与边界 |
+|---|---|---|
+| 固定姿态主线（历史竞赛版） | [`vision/pi/main.py`](vision/pi/main.py)、[`mcu/hal_entry.c`](mcu/hal_entry.c) | A/B/C 分拣、固定姿态、步进插值、快慢双速、八状态、压力阈值夹持；原代码保留 |
+| pickup_v2（赛后实验升级） | [`pickup_v2/README.md`](pickup_v2/README.md)、[`main_pickup.py`](pickup_v2/pi/main_pickup.py) | 视觉坐标转换、固定世界俯仰约束解析 IK；K 六通道包含夹爪，不是完整六运动轴 IK |
+| software_v3（本次软件扩展） | [`demo.py`](software_v3/demo.py)、[设计说明](software_v3/README.md) | 可配置六转动关节 FK/全位姿数值 IK、七路径点、八状态、独立夹爪、协议与模拟 MCU、合成压力分类；无硬件验证 |
 
-## 系统架构
+[版本与证据说明](docs/VERSIONS.md) · [能力到代码映射](docs/CAPABILITY_MAP.md) · [软件测试记录](docs/SOFTWARE_VALIDATION.md)。历史 `output/` 固件、`pickup_v2` 标定与训练日志全部保留。
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                  树莓派 5（视觉大脑）                               │
-│  CSI 摄像头 ─→ YOLOv8n 检测 ─→ 成熟度分类                         │
-│                        │                                         │
-│              UART 串口（115200 波特率）                             │
-│                        ▼                                         │
-│                  Renesas RA6M5（控制小脑）                          │
-│  串口指令解析 ─→ 状态机 ─→ PCA9685 I2C ─→ 6自由度机械臂             │
-│                                                                  │
-│  FSR402B ─→ ADC 200Hz 采样 ─→ 力控 PID ─→ 夹爪力度调节             │
-│                    │                                             │
-│              TinyML MLP（手写 C 前向传播）                          │
-│         压力时序数据 ─→ 抓取状态三分类                                │
-│                                                                  │
-│  ADC 窗口比较器 ─→ 硬件中断 ─→ 紧急释放                             │
-└──────────────────────────────────────────────────────────────────┘
-```
+## 无硬件演示
 
-## 实物展示
-
-<table>
-  <tr>
-    <td><img src="images/system_front_view.png" width="400" alt="正面视角"></td>
-    <td><img src="images/system_side_view.png" width="400" alt="侧面视角"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>正面视角</b> — 传送带 + 机械臂 + 分拣碗</td>
-    <td align="center"><b>侧面视角</b> — 完整工作台布局</td>
-  </tr>
-  <tr>
-    <td><img src="images/sorting_demo.png" width="400" alt="分拣演示"></td>
-    <td><img src="images/system_overview.png" width="400" alt="系统全景"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>分拣演示</b> — 草莓在传送带上等待分类</td>
-    <td align="center"><b>系统全景</b> — 完整系统</td>
-  </tr>
-</table>
-
-## YOLOv8n 训练结果
-
-模型：YOLOv8n | 输入尺寸：640x640 | 训练轮次：100 | 数据集：1185 张训练 / 209 张验证
-
-| 指标 | 数值 |
-|------|------|
-| mAP50 | **98.8%** |
-| mAP50-95 | **78.9%** |
-| 精确率 (Precision) | **97.4%** |
-| 召回率 (Recall) | **94.5%** |
-| F1 分数 | **0.96** |
-
-<table>
-  <tr>
-    <td><img src="vision/runs/strawberry_v12/results.png" width="500" alt="训练曲线"></td>
-    <td><img src="vision/runs/strawberry_v12/confusion_matrix.png" width="350" alt="混淆矩阵"></td>
-  </tr>
-  <tr>
-    <td align="center">训练与验证曲线</td>
-    <td align="center">混淆矩阵</td>
-  </tr>
-</table>
-
-<p align="center">
-  <img src="vision/runs/strawberry_v12/F1_curve.png" width="600" alt="F1-置信度曲线">
-  <br><i>F1-置信度曲线 — 全类别 F1=0.96 @ 置信度阈值=0.327</i>
-</p>
-
-## 技术栈
-
-| 层级 | 组件 | 职责 |
-|------|------|------|
-| 视觉层 | 树莓派 5 + OV5647 CSI 摄像头 | 图像采集、YOLOv8n 推理、任务调度 |
-| 控制层 | Renesas RA6M5 (Cortex-M33 @ 200MHz) | 实时控制、力控 PID 闭环、TinyML 推理 |
-| 执行层 | 6自由度机械臂 + PCA9685 驱动板 | I2C 驱动 6 路舵机 |
-| 末端执行器 | 柔性夹爪 + FSR402B 薄膜压力传感器 | 触觉反馈、自适应夹持力 |
-| 传输层 | 传送带 + 继电器控制 | 草莓自动输送 |
-| 通信层 | UART 115200 波特率 | 树莓派 ↔ RA6M5 双向指令链路 |
-
-## 分拣流水线
-
-```
-传送带 → 摄像头采图 → YOLOv8n 检测 → 成熟度分类
-                                          │
-                              ┌───────────┼───────────┐
-                              ▼           ▼           ▼
-                          指令 "A"     指令 "B"     指令 "C"
-                          （成熟）     （半成熟）    （未熟）
-                              │           │           │
-                    UART ─────┴───────────┴───────────┘
-                              ▼
-                    RA6M5 状态机执行
-                              │
-              ┌───────────────┼────────────────┐
-              ▼               ▼                ▼
-          位置 A           位置 B           位置 C
-        （成熟碗）       （半成熟碗）       （未熟碗）
-```
-
-## 项目结构
-
-```
-strawberry_grasp/
-├── images/                        # 实物照片
-├── vision/
-│   ├── pi/                        # 树莓派部署代码
-│   │   ├── config.py              #   全局配置（串口、摄像头、YOLO、阈值）
-│   │   ├── camera.py              #   CSI 摄像头封装（picamera2）
-│   │   ├── detector.py            #   YOLOv8n 推理封装
-│   │   ├── serial_comm.py         #   与 MCU 的串口通信
-│   │   ├── main.py                #   主流水线（采图 → 检测 → 发送指令）
-│   │   ├── capture_dataset.py     #   数据集采集工具
-│   │   └── calibrate.py           #   摄像头-机械臂坐标标定
-│   ├── runs/strawberry_v12/       # 训练结果（曲线、指标）
-│   ├── train.py                   # PC 端训练脚本
-│   ├── train_tinyml.py            # TinyML 模型训练（MLP 抓取状态分类，导出 C 权重头文件）
-│   ├── data.yaml                  # YOLO 数据集配置
-│   └── merge_dataset.py           # 数据集合并工具
-├── mcu/                           # MCU 最终固件（e2studio 工程 src/）
-│   ├── hal_entry.c                #   主固件：状态机 + 力控 PID + TinyML + 急停
-│   ├── hal_warmstart.c            #   热启动辅助
-│   ├── tinyml_grasp.h             #   手写 C MLP 前向传播（零库依赖）
-│   └── tinyml_weights.h           #   train_tinyml.py 自动生成的权重
-├── output/                        # MCU 固件版本迭代历史（C 源码）
-│   ├── hal_entry_state_machine.c          # v1：基础状态机
-│   ├── hal_entry_state_machine_v2.c       # v2：插值缓动 + TRANSIT 安全过渡
-│   ├── hal_entry_state_machine_v3_gripper_split.c  # v3：夹爪分体控制
-│   ├── hal_entry_v4_wrist_rotate.c        # v4：腕部旋转
-│   ├── hal_entry_v5_fsr_debug.c           # v5：FSR 压力传感器集成
-│   ├── hal_entry_teach_mode.c             # 示教模式工具（姿态标定）
-│   └── hal_entry_with_uart.c              # UART 通信集成
-├── docs/                          # 技术文档
-│   ├── 系统设计规格书.md
-│   ├── 机械臂布局与参数.md
-│   ├── 硬件接线档案.md
-│   ├── 舵机标定记录.csv
-│   └── ...
-└── README.md
-```
-
-## MCU 状态机设计
-
-RA6M5 固件实现了稳健的抓取状态机：
-
-```
-空闲 ──(串口指令)──→ 过渡 ──(插值运动)──→ 接近
-                                            │
-                                    (检测到接触)
-                                            ▼
-放置 ←──(提升完成)── 提升 ←──(夹持稳定)── 夹爪闭合
-  │                                        │
-  │                            (TinyML: 滑脱风险?)
-  │                                   ▼
-  │                               力度调节
-  │
-  └──→ 回位 ──→ 空闲
-
-  * 任意状态 ──(ADC 中断: 力超阈值)──→ 紧急释放
-```
-
-核心特性：
-- **插值过渡** — 舵机运动通过线性插值实现平滑移动，防止机械冲击
-- **TRANSIT 安全状态** — 姿态切换时的强制过渡状态，验证路径安全
-- **力控 PID 闭环** — 200Hz 采样，根据成熟度等级自适应调节增益
-- **TinyML 推理** — 187 参数手写 C MLP（16→8→4→3）对 16 步 FSR 力时序窗口三分类（稳定/滑脱风险/力量过大），单次推理 <1ms
-- **硬件紧急保护** — ADC 窗口比较器触发硬件中断，微秒级响应，绕过软件延迟
-
-## 舵机配置
-
-| 通道 | 关节 | 规格 | HOME 角度 |
-|------|------|------|-----------|
-| CH5 | 底座旋转 | 30kg / 270° | 135° |
-| CH1 | 肩关节 | 25kg / 180° | 90° |
-| CH0 | 肘关节 | 20kg / 180° | 45° |
-| CH2 | 腕部俯仰 | 20kg / 180° | 90° |
-| CH3 | 腕部旋转 | 20kg / 180° | 90° |
-| CH4 | 夹爪开合 | 20kg / 180° | 80°（张开） |
-
-## 快速开始
-
-### 树莓派端（视觉）
+在仓库根目录执行，建议 Python 3.11+：
 
 ```bash
-# 部署代码到树莓派
-scp -r vision/pi/* pi@<树莓派IP>:~/strawberry_grasp/
-
-# 在树莓派上安装依赖
-pip install ultralytics opencv-python-headless
-
-# 干跑模式（不连接 MCU，仅查看检测效果）
-python main.py --dry-run --preview
-
-# 正常运行（通过 UART 连接 MCU）
-python main.py
+python -m pip install -r software_v3/requirements.txt
+python -m software_v3.demo
+python -m pytest software_v3/tests pickup_v2/pi/tests -q
 ```
 
-### MCU 端（控制）
+打开生成的 `software_v3/artifacts/demo.html`，可播放/拖动 TCP 路径，查看六轴角度、调度状态、七路径点和 MLP 分类。JSON 保存完整轨迹、压力窗口和权重 SHA256。报告可离线打开，不需要相机、YOLO 权重、串口或 MCU。合成检测结果不是 YOLO 实际推理结果。
 
-1. 用 Renesas e2studio 新建 RA6M5 工程，将 `mcu/` 下 4 个文件复制到工程 `src/` 目录
-2. 编译并通过 J-Link / PyOCD 烧录到 RA6M5
-3. 连接 UART（SCI9: TX=P109, RX=P110）到树莓派的 `/dev/serial0`
+<details><summary>展开软件演示预览（合成输入，报告局部截图）</summary>
 
-## 通信协议
+![六轴软件报告预览，非真机结果](docs/software-demo.png)
 
-| 方向 | 指令 | 含义 |
-|------|------|------|
-| 树莓派 → MCU | `A` | 检测到成熟草莓，抓取到 A 碗 |
-| 树莓派 → MCU | `B` | 检测到半成熟草莓，抓取到 B 碗 |
-| 树莓派 → MCU | `C` | 检测到未熟草莓，抓取到 C 碗 |
-| 树莓派 → MCU | `G` | 启动传送带 |
-| 树莓派 → MCU | `X` | 停止传送带 |
-| MCU → 树莓派 | `DONE` | 抓取-放置周期完成 |
-| MCU → 树莓派 | `ERR` | 紧急停止或故障 |
+</details>
 
-## 许可说明
+```mermaid
+flowchart LR
+    A[样例像素中心与成熟度] --> B[平面单应变换与基座变换]
+    B --> C[六轴全位姿 IK 与路径预检]
+    C --> D[关节步进插值 / 快慢双速]
+    D --> E[V3 协议字节 / 模拟 MCU]
+    E --> F[独立周期压力任务 / 阈值接触控制]
+    F --> G[现有 float MLP / 分类诊断]
+```
 
-本项目用于学术展示与项目经验记录，仅供学习参考。
+故障演示（**预期返回码 2**，表示完成故障退出，不表示成功抓取）：
+
+```bash
+python -m software_v3.demo --fault unreachable
+python -m software_v3.demo --fault timeout
+python -m software_v3.demo --fault estop
+python -m software_v3.demo --fault no-contact
+```
+
+不可达时预检失败，零运动指令；丢失 ACK 时不重试可能已执行的命令，模拟 MCU 看门狗锁存故障；急停/接触超时停止调度和传送带，冻结运动与夹爪命令，不自动回零、松爪或重试。
+
+## 历史实物
+
+下列照片属于历史实物，不是新增六运动轴模型的照片。作品演示视频可联系作者提供。
+
+<p align="center"><img src="images/system_overview.png" width="760" alt="历史固定姿态分拣实物全景"></p>
+
+| 正面 | 侧面 |
+|---|---|
+| ![正面](images/system_front_view.png) | ![侧面](images/system_side_view.png) |
+
+![历史分拣场景](images/sorting_demo.png)
+
+## YOLOv8n 成熟度分类
+
+现有 [`detector.py`](vision/pi/detector.py) 检测 `ripe / semi_ripe / unripe`，树莓派主线映射为 A/B/C。训练配置 [`args.yaml`](vision/runs/strawberry_v12/args.yaml) 记录 `yolov8n.pt`、640 输入、100 轮。
+
+下表统一取原始 [`results.csv`](vision/runs/strawberry_v12/results.csv) **第 100 轮**，不混用最佳轮次或不同运行：
+
+| 指标 | 日志值 | 展示值 |
+|---|---|---|
+| mAP50 | 0.98801 | **98.8%** |
+| mAP50-95 | 0.78906 | 78.9% |
+| Precision | 0.97374 | 97.4% |
+| Recall | 0.94465 | 94.5% |
+
+![训练曲线](vision/runs/strawberry_v12/results.png)
+
+![混淆矩阵](vision/runs/strawberry_v12/confusion_matrix.png)
+
+这些是历史检测验证指标，不能解释为抓取成功率；仓库没有可确认的 91.1% 抓取统计。权重文件被 Git 忽略，当前演示不下载或重训 YOLO。
+
+## 压力控制与 TinyML 实际实现
+
+- 主线 `fsr_grasp_with_feedback` 通过压力 delta 阈值检测接触并限制继续闭合，不应表述为已验证的 PID 力控。
+- [`tinyml_grasp.h`](mcu/tinyml_grasp.h) 是 **float MLP 16→8→4→3，187 参数**，不是 INT8 1D-CNN。取最后 16 个 FSR delta，不足前补零，除以 1000；输出 `STABLE / SLIP_RISK / OVERFORCE`。
+- 主线分类后只打印结果和最大 logit，没有将模型分类接入真机夹持闭环调节；最大 logit 不是概率。
+- [`train_tinyml.py`](vision/train_tinyml.py) 默认使用合成压力数据，可读取真实 CSV；现有权重没有数据集清单和独立测试集记录，不能确认真实采样来源或泛化精度。详见 [TinyML 证据](docs/TINYML.md)。
+- 新模拟压力任务允许配置 **5 ms 调度周期**，与运动等待解耦。虚拟时钟测试不能写成 RA6M5 实测 200 Hz，也不支持 `<1 ms` 推理或微秒级保护的时延结论。
+
+## 历史硬件与协议
+
+| PCA9685 通道 | 用途 |
+|---|---|
+| CH5 | 底座 |
+| CH1 | 肩 |
+| CH0 | 肘 |
+| CH2 | 腕俯仰 |
+| CH3 | 腕旋转 |
+| CH4 | 夹爪；不计入六运动轴 |
+
+历史 UART 为 115200 波特率，A/B/C 分拣，G 启动传送带，X 停止；pickup_v2 新增 `M/K/J/OPEN/CLOSE/HOME/PLACE`。**V3 与两条历史协议不兼容**：必须版本、六运动轴模型与独立夹爪能力握手；小写十六进制外层避免历史大写指令被误触发。默认没有真实串口发送入口，见 [协议说明](software_v3/PROTOCOL.md)。
+
+历史 Pi 入口为 `vision/pi/main.py`，需要模型、picamera2、OpenCV、pyserial 与现场配置；历史 MCU 入口为 `mcu/hal_entry.c`，需要 Renesas e2studio/FSP 工程和硬件。不要将 V3 输出发送给历史固件。
+
+## 仍需硬件验证
+
+真实六轴机构与第七执行通道、尺寸/零位/限位和相机标定、碰撞与负载安全、RA6M5 ADC 调度抖动、实际串口与舵机跟踪、压力阈值、果实损伤和抓取统计、模型真实数据分类性能。本次只验证模型数学、配置边界、TCP 过渡高度、插值、模拟收发与故障退出、压力任务和 C/Python MLP 一致性。
+
+## 许可
+
+见 [LICENSE](LICENSE)。

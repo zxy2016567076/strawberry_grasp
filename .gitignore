@@ -44,6 +44,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+software_v3/artifacts/
+output/pdf/
 
 # YOLO / PyTorch model weights
 *.pt
