@@ -1,7 +1,7 @@
 """Simulation-only UART byte framing. Deliberately no serial-port backend.
 
     '~' + lowercase hex(UTF-8 JSON) + ':' + lowercase CRC32 hex + LF.
-    The wire alphabet excludes ALL historical uppercase command letters.
+    The wire alphabet excludes ALL board-firmware uppercase command letters.
 """
 import json
 import zlib

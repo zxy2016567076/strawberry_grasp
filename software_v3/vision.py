@@ -20,6 +20,6 @@ def target_to_base(config, detection):
 
 
 def from_detection(detection):
-    """Adapter for historical vision/pi/detector.py Detection, no model import."""
+    """Adapter for vision/pi/detector.py Detection, no model import."""
     return {"pixel": list(detection.center), "maturity": detection.class_name,
             "source": "external detector; verify weights and calibration before hardware use"}

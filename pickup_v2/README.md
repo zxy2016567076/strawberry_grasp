@@ -1,75 +1,17 @@
-# pickup_v2 — 任意位置草莓抓取系统
+# 视觉定位与固定俯仰抓取
 
-> 版本定位：本目录保留赛后实验升级身份。现有六通道包含夹爪，使用固定世界俯仰约束 IK，不是六运动轴全位姿 IK。本次新增软件见 [`../software_v3/`](../software_v3/README.md)，证据边界见 [`../docs/VERSIONS.md`](../docs/VERSIONS.md)。以下阶段记录按历史保留，不代表本次真机验收。
+本目录提供基于工作平面标定和固定工具俯仰约束的抓取模块。
 
-将草莓抓取从「固定姿态序列」升级为「视觉定位 + 逆运动学」的完全隔离实现。
+| 入口 | 内容 |
+|---|---|
+| pi/main_pickup.py | 树莓派视觉定位与抓取任务 |
+| pi/coord_transform.py | 像素、工作面、基座坐标转换 |
+| pi/kinematics.py | 固定世界俯仰约束解析 FK/IK |
+| pi/protocol_v2.py | M/K/J/OPEN/CLOSE/HOME/PLACE 指令 |
+| calibration/ | 相机、平面和关节标定工具 |
+| mcu/hal_entry_pickup_v2.c | 对应 RA6M5 接收端 |
+| pi/tests/ | 坐标、运动学和协议测试 |
 
-## 隔离原则
+K 接口为五运动关节加夹爪，共六舵机通道；与六运动轴模型不同。完整六运动轴的可运行软件演示见 [software_v3](../software_v3/README.md)，接口范围见 [实现说明](../docs/IMPLEMENTATION.md)。
 
-本目录下的所有内容**完全独立于现有的 `vision/pi/` 和主线固件 `mcu/hal_entry.c`**：
-
-- 不修改任何现有文件
-- 新主程序 `pi/main_pickup.py` 独立入口，与 `vision/pi/main.py` 互不影响
-- 新协议命令字 `M / K / J / OPEN / CLOSE / HOME` 与旧 `A / B / C / G / X` 平行存在
-- MCU 端生成完整副本 `mcu/hal_entry_pickup_v2.c`，由你手动决定是否替换
-- 想放弃整个功能，删 `pickup_v2/` 即可，原项目零痕迹
-
-## 目录结构
-
-```
-pickup_v2/
-├── README.md                    # 本文件
-├── docs/
-│   ├── 设计方案.md               # 总体设计（架构、阶段划分）
-│   ├── 坐标系与IK.md             # 4 层坐标系定义 + 解析 IK 推导
-│   ├── 标定流程SOP.md            # 现场标定操作手册
-│   ├── 协议规范.md               # 扩展串口协议（命令字、时序、错误码）
-│   ├── MCU实现说明.md            # hal_entry_pickup_v2.c 的设计要点
-│   └── 验收标准.md
-├── calibration/                 # 标定代码（拷自 strawberry_sort_pro）
-│   ├── intrinsic_calib.py       # 相机内参（棋盘格法）
-│   ├── homography.py            # 单应矩阵（像素↔工作面 mm）
-│   └── outputs/                 # 标定结果存这里
-│       ├── intrinsics.yaml
-│       ├── homography.yaml
-│       └── arm_offset.yaml      # 工作面原点 → 臂基偏移
-├── pi/                          # Pi 端新代码
-│   ├── config_v2.py             # 新配置（不 import 旧 config.py）
-│   ├── coord_transform.py       # 像素 → 工作面 → 臂基坐标
-│   ├── kinematics.py            # 解析逆运动学
-│   ├── protocol_v2.py           # 新串口协议封装
-│   ├── main_pickup.py           # 新主程序入口
-│   └── tests/
-│       ├── test_kinematics.py   # FK/IK 交叉验证
-│       └── test_coord.py        # 坐标转换测试
-└── mcu/
-    ├── hal_entry_pickup_v2.c    # MCU 端完整副本（不替换原文件）
-    ├── tinyml_grasp.h           # TinyML 推理头文件（与主线 mcu/ 一致）
-    └── tinyml_weights.h         # TinyML 权重（train_tinyml.py 生成）
-```
-
-## 阶段执行清单（更新于 2026-05-11）
-
-| 阶段 | 内容 | 验收 | 状态 |
-|---|---|---|---|
-| A | 标定代码 + 内参/单应矩阵 | RMS<1px, 单应误差<5mm | ✅ 工具就绪 / ⏳ 待 Pi 上跑出 yaml |
-| B | Python 端 IK + 单元测试 | FK(IK(p))≈p 误差<0.1mm | ✅ 完成（43/43 全过） |
-| C | hal_entry_pickup_v2.c | `K` 命令走指定关节角 | ✅ 完成 + 交叉审查修复 |
-| D | Pi-MCU 联调 | 像素→工作面→臂尖目测对齐 | ✅ Pi 代码就绪（85/85 测试） / ⏳ 待硬件联调 |
-| E | 实物抓取测试 | 9 网格点抓取成功率 | ⏳ 实验线持续推进中 |
-
-> 说明：主线「固定姿态序列分拣」（`mcu/hal_entry.c` + `vision/pi/`）已完整落地并参赛；pickup_v2 是赛后启动的实验性升级线。
-
-**技术复盘：** [`docs/串口调试复盘_2026-05-15.md`](docs/串口调试复盘_2026-05-15.md) ｜ [`docs/标定演进复盘_2026-06-03.md`](docs/标定演进复盘_2026-06-03.md)
-
-## 入口文档
-
-先读 [`docs/设计方案.md`](docs/设计方案.md)。
-
-## 与现有项目的关系
-
-- 视觉模型：复用 `vision/pi/detector.py` 的 YOLO 推理（import，不改）
-- 摄像头：复用 `vision/pi/camera.py`（import，不改）
-- 舵机标定：参考 `docs/舵机标定记录.csv`（不改）
-- 连杆尺寸：参考 `docs/机械臂布局与参数.md`（不改）
-- MCU 现有代码：完全冻结，新版本作为完整副本独立存在
+在仓库根目录执行 `python -m pytest pickup_v2/pi/tests -q`。部署需对应的硬件标定、串口配置和控制固件。

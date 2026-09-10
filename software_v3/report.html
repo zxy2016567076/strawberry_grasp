@@ -4,13 +4,13 @@
 <style>
 body{margin:0;background:#101922;color:#e4edf3;font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:36px 24px}h1{font-size:32px;margin:4px 0}h2{font-size:19px;color:#71dbc1}.tag{color:#ffc57b}.muted{color:#a5b7c5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#1b2a36;border:1px solid #354958;border-radius:12px;padding:20px;margin:16px 0}canvas{width:100%;height:300px;background:#14212b;border-radius:8px}button{padding:8px 22px;border:0;border-radius:5px;background:#71dbc1;color:#10222c;font-size:16px}input{width:65%;margin:0 20px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px;text-align:left;border-bottom:1px solid #354958}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.state{display:inline-block;margin:5px;padding:5px 10px;border:1px solid #536573;border-radius:5px}.active{background:#28645a}@media(max-width:720px){.grid{grid-template-columns:1fr}input{width:50%}h1{font-size:25px}}
 </style>
-<main><div class="tag">SOFTWARE V3 / 赛后独立扩展 / 无硬件</div><h1>从视觉目标到六轴抓放</h1>
-<p class="muted">样例目标、机械尺寸、标定与压力均为合成软件输入。历史竞赛版是五运动关节加夹爪；此页展示六运动关节加独立夹爪的新增软件。</p>
+<main><div class="tag">STRAWBERRY ROBOT / 六轴运控 / 软件验证</div><h1>从视觉目标到六轴抓放</h1>
+<p class="muted">六运动关节与独立夹爪，贯通目标坐标、抓放路径、双速插值、模拟执行与压力分类。样例目标、机构参数、标定和压力均为合成软件输入。</p>
 <div class="card"><strong id="status"></strong><p id="target"></p><div id="states"></div></div>
 <div class="card"><button id="play">播放</button><input id="seek" type="range" min="0" value="0"><span id="time"></span><p id="step"></p></div>
 <div class="grid"><div class="card"><h2>TCP 俯视路径 · XY / mm</h2><canvas id="xy" width="900" height="600"></canvas></div><div class="card"><h2>TCP 高度路径 · XZ / mm</h2><canvas id="xz" width="900" height="600"></canvas></div></div>
 <div class="grid"><div class="card"><h2>六个运动关节 · deg</h2><table id="joints"></table><p class="muted">夹爪由独立压力阈值任务控制，不进入 FK/IK。</p></div><div class="card"><h2>合成压力与 float MLP</h2><canvas id="pressure" width="900" height="600"></canvas><p id="ml"></p></div></div>
-<div class="card"><h2>七个任务路径点</h2><table id="waypoints"><tr><th>路径点</th><th>用途</th><th>基座 XYZ / mm</th></tr></table><p class="muted">七个路径点与八个调度状态独立。返回阶段复用 home；不改变历史姿态常量。</p></div>
+<div class="card"><h2>七个任务路径点</h2><table id="waypoints"><tr><th>路径点</th><th>用途</th><th>基座 XYZ / mm</th></tr></table><p class="muted">七个路径点与八个调度状态独立。返回阶段复用 home；路径点与调度状态分别建模。</p></div>
 <div class="card"><h2>验证边界</h2><p>已检查完整位姿 IK、关节限位、每步增量、TCP 工作空间和横移过渡高度。未验证自碰撞、环境障碍物、动力学、舵机跟踪或实际抓取。5 ms 是压力任务调度目标；虚拟时钟结果不是 RA6M5 实测采样率。MLP 输出仅为诊断，不参与夹爪闭环调节。</p><details><summary>协议握手字节示例</summary><pre id="wire"></pre></details></div></main>
 <script>
 const d=__DATA__, trace=d.trace, slider=document.getElementById('seek');

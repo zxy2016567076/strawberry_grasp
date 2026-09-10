@@ -1,1 +1,1 @@
-"""Post-competition six-motion-axis software example. No hardware transport."""
+"""Six-motion-axis software validation. No hardware transport."""

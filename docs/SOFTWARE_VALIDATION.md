@@ -1,6 +1,6 @@
 # 软件验证记录
 
-执行日期：2026-09-10。Windows / Python 3.12.4，NumPy 1.26.4、SciPy 1.13.1、pytest 7.4.4、MinGW GCC 8.1.0；基线 `f4a2d350baa62cc431039be72d89d59efc5fabf9`，工作分支 `feat/six-axis-software-demo`。所有新增执行结果均为主机软件测试，未连接相机、串口或 RA6M5。
+执行日期：2026-09-10。Windows / Python 3.12.4，NumPy 1.26.4、SciPy 1.13.1、pytest 7.4.4、MinGW GCC 8.1.0；所有新增执行结果均为主机软件测试，未连接相机、串口或 RA6M5。
 
 ## 自动测试
 
@@ -10,7 +10,7 @@
 python -m pytest software_v3/tests pickup_v2/pi/tests -q -p no:cacheprovider --basetemp=D:/VS_code/projects/rubbish_car/strawberry-sorting-robot/tmp/pytest-run-02
 ```
 
-结果：**126 passed in 16.12s**，无失败、无跳过。含原 pickup_v2 91 项、新 V3 35 项。一般环境直接运行 `python -m pytest software_v3/tests pickup_v2/pi/tests -q` 即可；上述临时目录是本机特有设置，复用 `--basetemp` 时 pytest 会清理该专用目录，不要指向工作文件目录。
+结果：**126 passed in 16.12s**，无失败、无跳过。含坐标/定俯仰模块 91 项、六轴模块 35 项。一般环境直接运行 `python -m pytest software_v3/tests pickup_v2/pi/tests -q` 即可；上述临时目录是本机特有设置，复用 `--basetemp` 时 pytest 会清理该专用目录，不要指向工作文件目录。
 
 最初测试曾受 Windows 临时目录权限影响（111 passed、12 项初始化错误），改为仓库内专用临时目录后完成验证；不是通过跳过测试规避失败。
 
@@ -46,4 +46,4 @@ gcc --version
 
 ## 尚需硬件验证
 
-六轴实际机构与夹爪独立执行通道；尺寸/零位/限位/相机标定；环境与自碰撞、负载与舵机跟踪；真实 UART 带宽与电气可靠性（V3 JSON 十六进制帧不保证能以历史 115200 波特率完成当前模拟步率）；RA6M5 定时器/ADC 抖动；压力阈值、夹持损伤与真实试验统计；TinyML 独立实物数据评估与任何分类闭环。当前 TCP 净空检查不能替代这些工作。
+六轴实际机构与夹爪独立执行通道；尺寸/零位/限位/相机标定；环境与自碰撞、负载与舵机跟踪；真实 UART 带宽与电气可靠性（V3 JSON 十六进制帧不保证能以板端 115200 波特率完成当前模拟步率）；RA6M5 定时器/ADC 抖动；压力阈值、夹持损伤与真实试验统计；TinyML 独立实物数据评估与任何分类闭环。当前 TCP 净空检查不能替代这些工作。
